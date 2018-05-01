@@ -1,3 +1,16 @@
+/*!
+Copyright 2018 Propel http://propel.site/.  All rights reserved.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 /* A custom AST walker for documentation. This was written because
  - TypeDoc is unable to generate documentation for a single exported module, as
    we have with api.ts,
@@ -11,6 +24,7 @@ import { execSync, spawnSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import * as ts from "typescript";
+import { log } from "../src/util";
 import { ArgEntry, DocEntry } from "../website/docs";
 
 const repoBasePath = path.resolve(__dirname, "..");
@@ -67,6 +81,7 @@ function getGithubUrlForFile(fileName: string) {
 
 export function genJSON(): DocEntry[] {
   // Global variables.
+  const { exclude } = require("../tsconfig");
   const visitQueue: ts.Node[] = [];
   const visitHistory = new Map<ts.Symbol, boolean>();
   let checker: ts.TypeChecker = null;
@@ -77,12 +92,26 @@ export function genJSON(): DocEntry[] {
     if (!visitHistory.has(s)) {
       // Find original symbol (might not be in api.ts).
       s = skipAlias(s, checker);
-      console.error("requestVisit", s.getName());
+      log("requestVisit", s.getName());
       const decls = s.getDeclarations();
-      // What does it mean tot have multiple declarations?
+      // What does it mean to have multiple declarations?
       // assert(decls.length === 1);
-      visitQueue.push(decls[0]);
-      visitHistory.set(s, true);
+      const sourceFileName = decls[0].getSourceFile().fileName;
+      // Dont visit if sourceFileName is in tsconfig excludes
+      if (!exclude.some(matchesSourceFileName)) {
+        visitQueue.push(decls[0]);
+        visitHistory.set(s, true);
+      } else {
+        log("excluded", sourceFileName);
+      }
+
+      function matchesSourceFileName(excludeDir) {
+        // Replace is used for cross-platform compatibility
+        // as 'getSourceFile().fileName' returns posix path
+        const excludePath = path.resolve(__dirname, "..", excludeDir);
+        const posixExcludePath = excludePath.replace(/\\/g, "/");
+        return sourceFileName.includes(posixExcludePath);
+      }
     }
   }
 
@@ -143,41 +172,41 @@ export function genJSON(): DocEntry[] {
       // console.error("- type alias", checker.typeToString(node.type));
       // console.error(""); // New Line.
     } else if (ts.isStringLiteral(node)) {
-      console.error("- string literal");
-      console.error(""); // New Line.
+      log("- string literal");
     } else if (ts.isVariableDeclaration(node)) {
       const symbol = checker.getSymbolAtLocation(node.name);
       const name = symbol.getName();
       if (ts.isFunctionLike(node.initializer)) {
         visitMethod(node.initializer, name);
       } else {
-        console.error("- var", name);
-        console.error(""); // New Line.
+        log("- var", name);
       }
     } else if (ts.isFunctionDeclaration(node)) {
       const symbol = checker.getSymbolAtLocation(node.name);
       visitMethod(node, symbol.getName());
 
     } else if (ts.isFunctionTypeNode(node)) {
-      console.error("- FunctionTypeNode.. ?");
+      log("- FunctionTypeNode.. ?");
 
     } else if (ts.isFunctionExpression(node)) {
       const symbol = checker.getSymbolAtLocation(node.name);
       const name = symbol ? symbol.getName() : "<unknown>";
-      console.error("- FunctionExpression", name);
+      log("- FunctionExpression", name);
 
     } else if (ts.isInterfaceDeclaration(node)) {
-      const symbol = checker.getSymbolAtLocation(node.name);
-      const name = symbol.getName();
-      console.error("- Interface", name);
+      visitClass(node);
 
     } else if (ts.isObjectLiteralExpression(node)) {
       // TODO Ignoring for now.
-      console.error("- ObjectLiteralExpression");
+      log("- ObjectLiteralExpression");
+
+    } else if (ts.isTypeLiteralNode(node)) {
+      // TODO Ignoring for now.
+      log("- TypeLiteral");
 
     } else {
-      console.log("Unknown node", node.kind);
-      assert(false);
+      log("Unknown node", node.kind);
+      assert(false, "Unknown node");
     }
   }
 
@@ -248,7 +277,7 @@ export function genJSON(): DocEntry[] {
     return `${githubUrl}#${sourceRange}`;
   }
 
-  function visitClass(node: ts.ClassDeclaration) {
+  function visitClass(node: ts.ClassDeclaration | ts.InterfaceDeclaration) {
     const symbol = checker.getSymbolAtLocation(node.name);
     const className = symbol.getName();
 
@@ -268,11 +297,17 @@ export function genJSON(): DocEntry[] {
 
       // Skip private members.
       if (ts.getCombinedModifierFlags(m) & ts.ModifierFlags.Private) {
-        console.error("private. skipping", name);
+        log("private. skipping", name);
         continue;
       }
 
-      if (ts.isConstructorDeclaration(m)) {
+      if (ts.isPropertySignature(m)) {
+        visitProp(m, name, className);
+
+      } else if (ts.isMethodSignature(m)) {
+        visitMethod(m, name, className);
+
+      } else if (ts.isConstructorDeclaration(m)) {
         visitMethod(m, "constructor", className);
 
       } else if (ts.isMethodDeclaration(m)) {
@@ -288,13 +323,13 @@ export function genJSON(): DocEntry[] {
         visitProp(m, name, className);
 
       } else {
-        console.log("member", className, name);
-        console.log(""); // New Line.
+        log("member", className, name);
       }
     }
   }
 
-  function visitProp(node: ts.ClassElement, name: string, className?: string) {
+  function visitProp(node: ts.ClassElement | ts.PropertySignature,
+                     name: string, className?: string) {
     name = className ? `${className}.${name}` : name;
 
     const symbol = checker.getSymbolAtLocation(node.name);
@@ -309,7 +344,7 @@ export function genJSON(): DocEntry[] {
     });
   }
 
-  function classElementName(m: ts.ClassElement): string {
+  function classElementName(m: ts.ClassElement | ts.TypeElement): string {
     if (m.name) {
       if (ts.isIdentifier(m.name)) {
         return ts.idText(m.name);
@@ -326,21 +361,12 @@ export function genJSON(): DocEntry[] {
     return "<unknown>";
   }
 
-  // TODO use tsconfig.json instead of supplying config.
-  gen(repoBasePath + "/src/api.ts", {
-    target: ts.ScriptTarget.ES5, module: ts.ModuleKind.CommonJS
-  });
+  gen(repoBasePath + "/src/api.ts", require("../tsconfig.json"));
 
-  // console.log(JSON.stringify(output, null, 2));
   return output;
 }
 
-function writeJSON() {
-  const target = process.argv[2];
-  if (!target) {
-    console.log("Usage: ts-node gendoc/gendoc.ts ./website/docs.json");
-    process.exit(1);
-  }
+export function writeJSON(target = repoBasePath + "/build/website") {
   const docs = genJSON();
   const j = JSON.stringify(docs, null, 2);
   fs.writeFileSync(target, j);
@@ -348,5 +374,10 @@ function writeJSON() {
 }
 
 if (require.main === module) {
-  writeJSON();
+  const target = process.argv[2];
+  if (!target) {
+    console.log("Usage: ts-node tools/gendoc.ts ./website/docs.json");
+    process.exit(1);
+  }
+  writeJSON(target);
 }
