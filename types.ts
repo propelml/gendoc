@@ -11,12 +11,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-import * as gendoc from "./gendoc";
-import { assert, test } from "liltest";
+export interface DocEntry {
+  kind: "class" | "method" | "property";
+  name: string;
+  typestr?: string;
+  docstr?: string;
+  args?: ArgEntry[];
+  retType?: string;
+  sourceUrl?: string;
+}
 
-test(async function gendoc_smoke() {
-  const docs = gendoc.genJSON(__dirname + "/testdata/pkg/src/index.ts");
-  assert(docs.length >= 1);
-  const names = docs.map(e => e.name);
-  assert(names.indexOf("foo") >= 0);
-});
+export interface ArgEntry {
+  name: string;
+  typestr?: string;
+  docstr?: string;
+}

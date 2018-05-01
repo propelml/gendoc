@@ -20,17 +20,23 @@ limitations under the License.
 */
 // tslint:disable:object-literal-sort-keys
 import * as assert from "assert";
-import { execSync, spawnSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import * as ts from "typescript";
-import { log } from "../src/util";
-import { ArgEntry, DocEntry } from "../website/docs";
+import { ArgEntry, DocEntry } from "./types";
 
+const debug = false;
+function log(...args: any[]): void {
+  if (debug) {
+    console.log(...args);
+  }
+}
+
+  /*
+// import { execSync, spawnSync } from "child_process";
+const fileGithubUrls = new Map<string, string>();
 const repoBasePath = path.resolve(__dirname, "..");
 const repoBaseUrl = "https://github.com/propelml/propel";
-
-const fileGithubUrls = new Map<string, string>();
 
 function getGithubUrlForFile(fileName: string) {
   if (fileGithubUrls.has(fileName)) {
@@ -46,7 +52,7 @@ function getGithubUrlForFile(fileName: string) {
     encoding: "utf8"
   });
   if (/\S/.test(stdout)) {
-    throw new Error(`File has been modified since last commit: ${relName}.`);
+    console.warn(`File has been modified since last commit: ${relName}.`);
   }
 
   // Get the commit hash for that most recent commit that updated a file.
@@ -78,10 +84,11 @@ function getGithubUrlForFile(fileName: string) {
   fileGithubUrls.set(fileName, githubUrl);
   return githubUrl;
 }
+  */
 
-export function genJSON(): DocEntry[] {
+export function genJSON(targetFn: string): DocEntry[] {
   // Global variables.
-  const { exclude } = require("../tsconfig");
+  const { exclude } = require("./tsconfig");
   const visitQueue: ts.Node[] = [];
   const visitHistory = new Map<ts.Symbol, boolean>();
   let checker: ts.TypeChecker = null;
@@ -98,14 +105,14 @@ export function genJSON(): DocEntry[] {
       // assert(decls.length === 1);
       const sourceFileName = decls[0].getSourceFile().fileName;
       // Dont visit if sourceFileName is in tsconfig excludes
-      if (!exclude.some(matchesSourceFileName)) {
+      if (!exclude || !exclude.some(matchesSourceFileName)) {
         visitQueue.push(decls[0]);
         visitHistory.set(s, true);
       } else {
         log("excluded", sourceFileName);
       }
 
-      function matchesSourceFileName(excludeDir) {
+      function matchesSourceFileName(excludeDir: string) {
         // Replace is used for cross-platform compatibility
         // as 'getSourceFile().fileName' returns posix path
         const excludePath = path.resolve(__dirname, "..", excludeDir);
@@ -252,7 +259,7 @@ export function genJSON(): DocEntry[] {
       args: argEntries,
       retType: checker.typeToString(retType),
       docstr,
-      sourceUrl: getSourceUrl(methodNode)
+      // sourceUrl: getSourceUrl(methodNode)
     });
   }
 
@@ -263,6 +270,7 @@ export function genJSON(): DocEntry[] {
     return undefined;
   }
 
+  /*
   function getSourceUrl(node: ts.Node): string {
     const sourceFile = node.getSourceFile();
     const docNodes = (node as any).jsDoc; // No public API for this?
@@ -276,6 +284,7 @@ export function genJSON(): DocEntry[] {
     const githubUrl = getGithubUrlForFile(sourceFile.fileName);
     return `${githubUrl}#${sourceRange}`;
   }
+  */
 
   function visitClass(node: ts.ClassDeclaration | ts.InterfaceDeclaration) {
     const symbol = checker.getSymbolAtLocation(node.name);
@@ -289,7 +298,7 @@ export function genJSON(): DocEntry[] {
       name: className,
       kind: "class",
       docstr,
-      sourceUrl: getSourceUrl(node)
+      // sourceUrl: getSourceUrl(node)
     });
 
     for (const m of node.members) {
@@ -340,7 +349,7 @@ export function genJSON(): DocEntry[] {
       kind: "property",
       typestr: checker.typeToString(t),
       docstr: getFlatDocstr(symbol),
-      sourceUrl: getSourceUrl(node)
+      // sourceUrl: getSourceUrl(node)
     });
   }
 
@@ -361,23 +370,24 @@ export function genJSON(): DocEntry[] {
     return "<unknown>";
   }
 
-  gen(repoBasePath + "/src/api.ts", require("../tsconfig.json"));
+  gen(targetFn, require("./tsconfig.json"));
 
   return output;
 }
 
-export function writeJSON(target = repoBasePath + "/build/website") {
-  const docs = genJSON();
+export function writeJSON(inputSource: string, outputJson: string): void {
+  const docs = genJSON(inputSource);
   const j = JSON.stringify(docs, null, 2);
-  fs.writeFileSync(target, j);
-  console.log("wrote", target);
+  fs.writeFileSync(outputJson, j);
+  console.log("wrote", outputJson);
 }
 
 if (require.main === module) {
-  const target = process.argv[2];
-  if (!target) {
-    console.log("Usage: ts-node tools/gendoc.ts ./website/docs.json");
+  const inputSource = process.argv[2];
+  const outputJson = process.argv[3];
+  if (!inputSource || !outputJson) {
+    console.log("Usage: ts-node gendoc.ts ./input.ts ./output.json");
     process.exit(1);
   }
-  writeJSON(target);
+  writeJSON(inputSource, outputJson);
 }

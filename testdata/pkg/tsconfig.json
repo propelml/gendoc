@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noImplicitAny": true,
+    "sourceMap": true,
+    "removeComments": true,
+    "preserveConstEnums": true,
+    "declaration": true,
+    "target": "es2017",
+    "lib": ["es2017", "dom"],
+    "noUnusedLocals": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    "noUnusedParameters": false,
+    "outDir": "./dist",
+    "pretty": true,
+    "noFallthroughCasesInSwitch": true,
+    "allowUnreachableCode": false,
+    "experimentalDecorators": true
+  },
+  "include": ["src"]
+}
