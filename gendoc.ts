@@ -32,7 +32,7 @@ function log(...args: any[]): void {
   }
 }
 
-  /*
+/*
 // import { execSync, spawnSync } from "child_process";
 const fileGithubUrls = new Map<string, string>();
 const repoBasePath = path.resolve(__dirname, "..");
@@ -131,8 +131,9 @@ export function genJSON(targetFn: string): DocEntry[] {
   }
 
   function skipAlias(symbol: ts.Symbol, checker: ts.TypeChecker) {
-    return symbol.flags & ts.SymbolFlags.Alias ?
-      checker.getAliasedSymbol(symbol) : symbol;
+    return symbol.flags & ts.SymbolFlags.Alias
+      ? checker.getAliasedSymbol(symbol)
+      : symbol;
   }
 
   /** Generate documentation for all classes in a set of .ts files */
@@ -168,7 +169,6 @@ export function genJSON(targetFn: string): DocEntry[] {
 
   // visit nodes finding exported classes
   function visit(node: ts.Node) {
-
     if (ts.isClassDeclaration(node) && node.name) {
       // This is a top level class, get its symbol
       visitClass(node);
@@ -191,34 +191,31 @@ export function genJSON(targetFn: string): DocEntry[] {
     } else if (ts.isFunctionDeclaration(node)) {
       const symbol = checker.getSymbolAtLocation(node.name);
       visitMethod(node, symbol.getName());
-
     } else if (ts.isFunctionTypeNode(node)) {
       log("- FunctionTypeNode.. ?");
-
     } else if (ts.isFunctionExpression(node)) {
       const symbol = checker.getSymbolAtLocation(node.name);
       const name = symbol ? symbol.getName() : "<unknown>";
       log("- FunctionExpression", name);
-
     } else if (ts.isInterfaceDeclaration(node)) {
       visitClass(node);
-
     } else if (ts.isObjectLiteralExpression(node)) {
       // TODO Ignoring for now.
       log("- ObjectLiteralExpression");
-
     } else if (ts.isTypeLiteralNode(node)) {
       // TODO Ignoring for now.
       log("- TypeLiteral");
-
     } else {
       log("Unknown node", node.kind);
       assert(false, "Unknown node");
     }
   }
 
-  function visitMethod(methodNode: ts.FunctionLike,
-                       methodName: string, className?: string) {
+  function visitMethod(
+    methodNode: ts.FunctionLike,
+    methodName: string,
+    className?: string,
+  ) {
     // Get the documentation string.
     const sym = checker.getSymbolAtLocation(methodNode.name);
     const docstr = getFlatDocstr(sym);
@@ -238,8 +235,10 @@ export function genJSON(targetFn: string): DocEntry[] {
     // Print each of the parameters.
     const argEntries: ArgEntry[] = [];
     for (const paramSymbol of sig.parameters) {
-      const paramType = checker.getTypeOfSymbolAtLocation(paramSymbol,
-        paramSymbol.valueDeclaration!);
+      const paramType = checker.getTypeOfSymbolAtLocation(
+        paramSymbol,
+        paramSymbol.valueDeclaration!,
+      );
       requestVisitType(paramType);
 
       argEntries.push({
@@ -312,16 +311,12 @@ export function genJSON(targetFn: string): DocEntry[] {
 
       if (ts.isPropertySignature(m)) {
         visitProp(m, name, className);
-
       } else if (ts.isMethodSignature(m)) {
         visitMethod(m, name, className);
-
       } else if (ts.isConstructorDeclaration(m)) {
         visitMethod(m, "constructor", className);
-
       } else if (ts.isMethodDeclaration(m)) {
         visitMethod(m, name, className);
-
       } else if (ts.isPropertyDeclaration(m)) {
         if (ts.isFunctionLike(m.initializer)) {
           visitMethod(m.initializer, name, className);
@@ -330,15 +325,17 @@ export function genJSON(targetFn: string): DocEntry[] {
         }
       } else if (ts.isGetAccessorDeclaration(m)) {
         visitProp(m, name, className);
-
       } else {
         log("member", className, name);
       }
     }
   }
 
-  function visitProp(node: ts.ClassElement | ts.PropertySignature,
-                     name: string, className?: string) {
+  function visitProp(
+    node: ts.ClassElement | ts.PropertySignature,
+    name: string,
+    className?: string,
+  ) {
     name = className ? `${className}.${name}` : name;
 
     const symbol = checker.getSymbolAtLocation(node.name);

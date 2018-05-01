@@ -12,7 +12,8 @@
   },
   "devDependencies": {
     "@types/node": "^10.0.2",
-    "liltest": "^0.0.5"
+    "liltest": "^0.0.5",
+    "prettier": "^1.12.1"
   },
   "dependencies": {
     "typescript": "^2.8.3"
