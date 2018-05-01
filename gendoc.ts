@@ -26,65 +26,11 @@ import * as ts from "typescript";
 import { ArgEntry, DocEntry } from "./types";
 
 const debug = false;
-function log(...args: any[]): void {
+function log(...args: Array<string|number>): void {
   if (debug) {
     console.log(...args);
   }
 }
-
-/*
-// import { execSync, spawnSync } from "child_process";
-const fileGithubUrls = new Map<string, string>();
-const repoBasePath = path.resolve(__dirname, "..");
-const repoBaseUrl = "https://github.com/propelml/propel";
-
-function getGithubUrlForFile(fileName: string) {
-  if (fileGithubUrls.has(fileName)) {
-    return fileGithubUrls.get(fileName);
-  }
-
-  const relName = path.relative(repoBasePath, fileName).replace(/\\/g, "/");
-
-  // Sanity check: verify that the file in it's current form has been
-  // committed.
-  let stdout = execSync(`git status --porcelain -- "${fileName}"`, {
-    cwd: path.dirname(fileName),
-    encoding: "utf8"
-  });
-  if (/\S/.test(stdout)) {
-    console.warn(`File has been modified since last commit: ${relName}.`);
-  }
-
-  // Get the commit hash for that most recent commit that updated a file.
-  // This is done to reduce churn in the generated documentation; as long as a
-  // file doesn't change, the "source" links in the documentation won't change
-  // either.
-  stdout = execSync(`git log -n1 --pretty="%H" -- "${fileName}"`, {
-    cwd: path.dirname(fileName),
-    encoding: "utf8"
-  });
-  const commitSha = stdout.match(/^\s*([0-9a-fA-F]{40})\s*$/)[1];
-  const githubUrl = `${repoBaseUrl}/blob/${commitSha}/${relName}`;
-
-  // Sanity check: verify that the inferred github url can actually be
-  // loaded.
-  const { status, stderr } = spawnSync(
-    process.execPath,
-    [`${__dirname}/check_url.js`, githubUrl],
-    { encoding: "utf8" }
-  );
-  if (status !== 0) {
-    const msg =
-      `File committed but not available on github: ${relName}\n` +
-      `You probably need to push your branch to github.\n` +
-      stderr;
-    console.warn(msg);
-  }
-
-  fileGithubUrls.set(fileName, githubUrl);
-  return githubUrl;
-}
-  */
 
 export function genJSON(targetFn: string): DocEntry[] {
   // Global variables.
@@ -131,9 +77,8 @@ export function genJSON(targetFn: string): DocEntry[] {
   }
 
   function skipAlias(symbol: ts.Symbol, checker: ts.TypeChecker) {
-    return symbol.flags & ts.SymbolFlags.Alias
-      ? checker.getAliasedSymbol(symbol)
-      : symbol;
+    return symbol.flags & ts.SymbolFlags.Alias ?
+      checker.getAliasedSymbol(symbol) : symbol;
   }
 
   /** Generate documentation for all classes in a set of .ts files */
@@ -169,6 +114,7 @@ export function genJSON(targetFn: string): DocEntry[] {
 
   // visit nodes finding exported classes
   function visit(node: ts.Node) {
+
     if (ts.isClassDeclaration(node) && node.name) {
       // This is a top level class, get its symbol
       visitClass(node);
@@ -191,31 +137,34 @@ export function genJSON(targetFn: string): DocEntry[] {
     } else if (ts.isFunctionDeclaration(node)) {
       const symbol = checker.getSymbolAtLocation(node.name);
       visitMethod(node, symbol.getName());
+
     } else if (ts.isFunctionTypeNode(node)) {
       log("- FunctionTypeNode.. ?");
+
     } else if (ts.isFunctionExpression(node)) {
       const symbol = checker.getSymbolAtLocation(node.name);
       const name = symbol ? symbol.getName() : "<unknown>";
       log("- FunctionExpression", name);
+
     } else if (ts.isInterfaceDeclaration(node)) {
       visitClass(node);
+
     } else if (ts.isObjectLiteralExpression(node)) {
       // TODO Ignoring for now.
       log("- ObjectLiteralExpression");
+
     } else if (ts.isTypeLiteralNode(node)) {
       // TODO Ignoring for now.
       log("- TypeLiteral");
+
     } else {
       log("Unknown node", node.kind);
       assert(false, "Unknown node");
     }
   }
 
-  function visitMethod(
-    methodNode: ts.FunctionLike,
-    methodName: string,
-    className?: string,
-  ) {
+  function visitMethod(methodNode: ts.FunctionLike,
+                       methodName: string, className?: string) {
     // Get the documentation string.
     const sym = checker.getSymbolAtLocation(methodNode.name);
     const docstr = getFlatDocstr(sym);
@@ -235,10 +184,8 @@ export function genJSON(targetFn: string): DocEntry[] {
     // Print each of the parameters.
     const argEntries: ArgEntry[] = [];
     for (const paramSymbol of sig.parameters) {
-      const paramType = checker.getTypeOfSymbolAtLocation(
-        paramSymbol,
-        paramSymbol.valueDeclaration!,
-      );
+      const paramType = checker.getTypeOfSymbolAtLocation(paramSymbol,
+        paramSymbol.valueDeclaration!);
       requestVisitType(paramType);
 
       argEntries.push({
@@ -269,22 +216,6 @@ export function genJSON(targetFn: string): DocEntry[] {
     return undefined;
   }
 
-  /*
-  function getSourceUrl(node: ts.Node): string {
-    const sourceFile = node.getSourceFile();
-    const docNodes = (node as any).jsDoc; // No public API for this?
-    const startNode = (docNodes && docNodes[0]) || node;
-    const [startLine, endLine] = [
-      startNode.getStart(),
-      node.getEnd()
-    ].map(pos => sourceFile.getLineAndCharacterOfPosition(pos).line + 1);
-    const sourceRange =
-      endLine > startLine ? `L${startLine}-L${endLine}` : `L${startLine}`;
-    const githubUrl = getGithubUrlForFile(sourceFile.fileName);
-    return `${githubUrl}#${sourceRange}`;
-  }
-  */
-
   function visitClass(node: ts.ClassDeclaration | ts.InterfaceDeclaration) {
     const symbol = checker.getSymbolAtLocation(node.name);
     const className = symbol.getName();
@@ -311,12 +242,16 @@ export function genJSON(targetFn: string): DocEntry[] {
 
       if (ts.isPropertySignature(m)) {
         visitProp(m, name, className);
+
       } else if (ts.isMethodSignature(m)) {
         visitMethod(m, name, className);
+
       } else if (ts.isConstructorDeclaration(m)) {
         visitMethod(m, "constructor", className);
+
       } else if (ts.isMethodDeclaration(m)) {
         visitMethod(m, name, className);
+
       } else if (ts.isPropertyDeclaration(m)) {
         if (ts.isFunctionLike(m.initializer)) {
           visitMethod(m.initializer, name, className);
@@ -325,17 +260,15 @@ export function genJSON(targetFn: string): DocEntry[] {
         }
       } else if (ts.isGetAccessorDeclaration(m)) {
         visitProp(m, name, className);
+
       } else {
         log("member", className, name);
       }
     }
   }
 
-  function visitProp(
-    node: ts.ClassElement | ts.PropertySignature,
-    name: string,
-    className?: string,
-  ) {
+  function visitProp(node: ts.ClassElement | ts.PropertySignature,
+                     name: string, className?: string) {
     name = className ? `${className}.${name}` : name;
 
     const symbol = checker.getSymbolAtLocation(node.name);
